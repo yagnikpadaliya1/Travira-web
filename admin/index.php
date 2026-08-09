@@ -2,7 +2,7 @@
 /*
  * ADMIN LOGIN PAGE
  * ----------------
- * Checks username and password against the admins table.
+ * Checks username and password against the admins collection.
  * Uses PHP's password_verify() for secure bcrypt comparison.
  * On success, stores session data and redirects to dashboard.
  */
@@ -29,12 +29,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             // Fetch admin record by username
-            $stmt = $pdo->prepare("SELECT * FROM admins WHERE username = :u LIMIT 1");
-            $stmt->execute([':u' => $username]);
-            $admin = $stmt->fetch(PDO::FETCH_ASSOC);
+            $doc = $adminsCollection->findOne(['username' => $username]);
+            $admin = docToArray($doc);
 
             // Verify password against the stored bcrypt hash
-            if ($admin && password_verify($password, $admin['password_hash'])) {
+            if ($admin && isset($admin['password_hash']) && password_verify($password, $admin['password_hash'])) {
                 $_SESSION['admin_logged_in'] = true;
                 $_SESSION['admin_username']  = $admin['username'];
                 header('Location: dashboard.php');
@@ -42,7 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $error = 'Invalid username or password.';
             }
-        } catch (PDOException $e) {
+        } catch (Exception $e) {
             $error = 'Database error: ' . $e->getMessage();
         }
     }

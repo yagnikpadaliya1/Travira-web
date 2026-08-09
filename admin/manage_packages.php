@@ -21,49 +21,48 @@ $message = '';
 
 // --- DELETE ---
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-    $stmt = $pdo->prepare("DELETE FROM packages WHERE package_id = :id");
-    $stmt->execute([':id' => (int)$_GET['delete']]);
+    $id = (int)$_GET['delete'];
+    $packagesCollection->deleteOne(['package_id' => $id]);
+    // Optionally also remove related bookings:
+    // $bookingsCollection->deleteMany(['package_id' => $id]);
     $message = 'Package deleted successfully.';
 }
 
 // --- CREATE or UPDATE ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $title         = trim($_POST['title']);
-    $destination   = trim($_POST['destination']);
-    $price         = $_POST['price'];
-    $duration_days = (int)$_POST['duration_days'];
-    $description   = trim($_POST['description']);
-    $image_path    = trim($_POST['image_path']);
+    $title         = trim($_POST['title'] ?? '');
+    $destination   = trim($_POST['destination'] ?? '');
+    $price         = (float)($_POST['price'] ?? 0);
+    $duration_days = (int)($_POST['duration_days'] ?? 1);
+    $description   = trim($_POST['description'] ?? '');
+    $image_path    = trim($_POST['image_path'] ?? '');
 
     if (isset($_POST['package_id']) && !empty($_POST['package_id'])) {
         // UPDATE existing package
-        $sql = "UPDATE packages
-                SET title = :title, destination = :destination, price = :price,
-                    duration_days = :days, description = :description, image_path = :image
-                WHERE package_id = :id";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':title'       => $title,
-            ':destination' => $destination,
-            ':price'       => $price,
-            ':days'        => $duration_days,
-            ':description' => $description,
-            ':image'       => $image_path,
-            ':id'          => (int)$_POST['package_id'],
-        ]);
+        $id = (int)$_POST['package_id'];
+        $packagesCollection->updateOne(
+            ['package_id' => $id],
+            ['$set' => [
+                'title'         => $title,
+                'destination'   => $destination,
+                'price'         => $price,
+                'duration_days' => $duration_days,
+                'description'   => $description,
+                'image_path'    => $image_path,
+            ]]
+        );
         $message = 'Package updated successfully.';
     } else {
         // INSERT new package
-        $sql = "INSERT INTO packages (title, destination, price, duration_days, description, image_path)
-                VALUES (:title, :destination, :price, :days, :description, :image)";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            ':title'       => $title,
-            ':destination' => $destination,
-            ':price'       => $price,
-            ':days'        => $duration_days,
-            ':description' => $description,
-            ':image'       => $image_path,
+        $newId = getNextSequenceId($packagesCollection, 'package_id');
+        $packagesCollection->insertOne([
+            'package_id'    => $newId,
+            'title'         => $title,
+            'destination'   => $destination,
+            'price'         => $price,
+            'duration_days' => $duration_days,
+            'description'   => $description,
+            'image_path'    => $image_path,
         ]);
         $message = 'New package added successfully.';
     }
@@ -74,13 +73,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // --- FETCH PACKAGE FOR EDITING ---
 $edit_package = null;
 if (isset($_GET['edit']) && is_numeric($_GET['edit'])) {
-    $stmt = $pdo->prepare("SELECT * FROM packages WHERE package_id = :id");
-    $stmt->execute([':id' => (int)$_GET['edit']]);
-    $edit_package = $stmt->fetch(PDO::FETCH_ASSOC);
+    $doc = $packagesCollection->findOne(['package_id' => (int)$_GET['edit']]);
+    $edit_package = docToArray($doc);
 }
 
 // --- FETCH ALL PACKAGES for the table ---
-$packages = $pdo->query("SELECT * FROM packages ORDER BY package_id DESC")->fetchAll(PDO::FETCH_ASSOC);
+$packages = [];
+$cursor = $packagesCollection->find([], ['sort' => ['package_id' => -1]]);
+foreach ($cursor as $doc) {
+    $packages[] = docToArray($doc);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">

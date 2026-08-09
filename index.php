@@ -3,12 +3,27 @@
 require_once 'config/db.php';
 require_once 'includes/header.php';
 
-// 2. Fetch packages (added duration_days if you add it to your DB later)
+// 2. Fetch packages (latest 6)
 try {
-    $sql = "SELECT package_id, title, destination, price, image_path FROM Packages ORDER BY package_id DESC LIMIT 6";
-    $stmt = $pdo->query($sql);
-    $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
+    $cursor = $packagesCollection->find(
+        [],
+        [
+            'sort'  => ['package_id' => -1],
+            'limit' => 6,
+            'projection' => [
+                'package_id'  => 1,
+                'title'       => 1,
+                'destination' => 1,
+                'price'       => 1,
+                'image_path'  => 1,
+            ]
+        ]
+    );
+    $packages = [];
+    foreach ($cursor as $doc) {
+        $packages[] = docToArray($doc);
+    }
+} catch (Exception $e) {
     $error_message = "Error loading packages: " . $e->getMessage();
     $packages = [];
 }

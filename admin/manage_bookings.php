@@ -26,8 +26,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
     $allowed    = ['Pending', 'Confirmed', 'Cancelled'];
 
     if (in_array($new_status, $allowed)) {
-        $stmt = $pdo->prepare("UPDATE bookings SET status = :s WHERE booking_id = :id");
-        $stmt->execute([':s' => $new_status, ':id' => $booking_id]);
+        $bookingsCollection->updateOne(
+            ['booking_id' => $booking_id],
+            ['$set' => ['status' => $new_status]]
+        );
         $message = 'Booking #' . $booking_id . ' status updated to ' . $new_status . '.';
     }
     header('Location: manage_bookings.php');
@@ -36,21 +38,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
 
 // --- Handle Delete ---
 if (isset($_GET['delete']) && is_numeric($_GET['delete'])) {
-    $stmt = $pdo->prepare("DELETE FROM bookings WHERE booking_id = :id");
-    $stmt->execute([':id' => (int)$_GET['delete']]);
+    $bookingsCollection->deleteOne(['booking_id' => (int)$_GET['delete']]);
     header('Location: manage_bookings.php');
     exit;
 }
 
-// --- Fetch All Bookings ---
-$bookings = $pdo->query("
-    SELECT b.booking_id, b.customer_name, b.customer_email,
-           b.travel_date, b.number_of_people, b.status,
-           p.title AS package_title
-    FROM bookings b
-    JOIN packages p ON b.package_id = p.package_id
-    ORDER BY b.booking_id DESC
-")->fetchAll(PDO::FETCH_ASSOC);
+// --- Fetch All Bookings (with package title via $lookup) ---
+$pipeline = [
+    ['$sort' => ['booking_id' => -1]],
+    [
+        '$lookup' => [
+            'from'         => 'packages',
+            'localField'   => 'package_id',
+            'foreignField' => 'package_id',
+            'as'           => 'package'
+        ]
+    ],
+    [
+        '$unwind' => [
+            'path'                       => '$package',
+            'preserveNullAndEmptyArrays' => true
+        ]
+    ],
+    [
+        '$project' => [
+            'booking_id'       => 1,
+            'customer_name'    => 1,
+            'customer_email'   => 1,
+            'travel_date'      => 1,
+            'number_of_people' => 1,
+            'status'           => 1,
+            'package_title'    => '$package.title',
+        ]
+    ]
+];
+
+$bookings = [];
+try {
+    $cursor = $bookingsCollection->aggregate($pipeline);
+    foreach ($cursor as $doc) {
+        $bookings[] = docToArray($doc);
+    }
+} catch (Exception $e) {
+    // empty
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -110,7 +141,7 @@ $bookings = $pdo->query("
                             <strong><?php echo htmlspecialchars($b['customer_name']); ?></strong><br>
                             <small><?php echo htmlspecialchars($b['customer_email']); ?></small>
                         </td>
-                        <td><?php echo htmlspecialchars($b['package_title']); ?></td>
+                        <td><?php echo htmlspecialchars($b['package_title'] ?? '—'); ?></td>
                         <td><?php echo date('M j, Y', strtotime($b['travel_date'])); ?></td>
                         <td><?php echo $b['number_of_people']; ?></td>
                         <td>

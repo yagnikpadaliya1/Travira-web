@@ -1,0 +1,17 @@
+{
+    "name": "admin/travira-web",
+    "autoload": {
+        "psr-4": {
+            "Admin\\TraviraWeb\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Preetp2708",
+            "email": "pritp7675@gmail.com"
+        }
+    ],
+    "require": {
+        "mongodb/mongodb": "*"
+    }
+}

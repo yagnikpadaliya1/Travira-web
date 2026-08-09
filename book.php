@@ -4,15 +4,16 @@ require_once 'config/db.php';
 $package    = null;
 $success    = false;
 $error_msg  = '';
+$name       = '';
+$email      = '';
 
 // Fetch the package being booked
 if (isset($_GET['package_id']) && is_numeric($_GET['package_id'])) {
     $package_id = (int)$_GET['package_id'];
     try {
-        $stmt = $pdo->prepare("SELECT * FROM packages WHERE package_id = :id");
-        $stmt->execute([':id' => $package_id]);
-        $package = $stmt->fetch(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
+        $doc = $packagesCollection->findOne(['package_id' => $package_id]);
+        $package = docToArray($doc);
+    } catch (Exception $e) {
         $error_msg = "Error loading package: " . $e->getMessage();
     }
 }
@@ -27,18 +28,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($pkg_id && $name && $email && $date && $people >= 1) {
         try {
-            $sql = "INSERT INTO bookings (package_id, customer_name, customer_email, travel_date, number_of_people, status)
-                    VALUES (:pkg_id, :name, :email, :date, :people, 'Pending')";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([
-                ':pkg_id' => $pkg_id,
-                ':name'   => $name,
-                ':email'  => $email,
-                ':date'   => $date,
-                ':people' => $people,
+            $booking_id = getNextSequenceId($bookingsCollection, 'booking_id');
+
+            $bookingsCollection->insertOne([
+                'booking_id'       => $booking_id,
+                'package_id'       => $pkg_id,
+                'customer_name'    => $name,
+                'customer_email'   => $email,
+                'travel_date'      => $date,
+                'number_of_people' => $people,
+                'status'           => 'Pending',
+                'created_at'       => new MongoDB\BSON\UTCDateTime(),
             ]);
             $success = true;
-        } catch (PDOException $e) {
+        } catch (Exception $e) {
             $error_msg = "Booking failed: " . $e->getMessage();
         }
     } else {

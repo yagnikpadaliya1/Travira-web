@@ -1,0 +1,33 @@
+# ==============================
+# Travira Web - Git Ignore
+# ==============================
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+get.env
+
+# Composer dependencies
+/vendor/
+
+# Composer PHAR
+composer.phar
+
+# Local IDE / editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp

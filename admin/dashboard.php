@@ -16,21 +16,51 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 require_once '../config/db.php';
 
 // --- Fetch summary statistics ---
-$total_bookings = $pdo->query("SELECT COUNT(*) FROM bookings")->fetchColumn();
-$total_pending  = $pdo->query("SELECT COUNT(*) FROM bookings WHERE status = 'Pending'")->fetchColumn();
-$total_confirmed= $pdo->query("SELECT COUNT(*) FROM bookings WHERE status = 'Confirmed'")->fetchColumn();
-$total_packages = $pdo->query("SELECT COUNT(*) FROM packages")->fetchColumn();
+$total_bookings  = $bookingsCollection->countDocuments([]);
+$total_pending   = $bookingsCollection->countDocuments(['status' => 'Pending']);
+$total_confirmed = $bookingsCollection->countDocuments(['status' => 'Confirmed']);
+$total_packages  = $packagesCollection->countDocuments([]);
 
-// --- Fetch the 8 most recent bookings ---
-$recent_bookings = $pdo->query("
-    SELECT b.booking_id, b.customer_name, b.customer_email,
-           b.travel_date, b.number_of_people, b.status,
-           p.title AS package_title
-    FROM bookings b
-    JOIN packages p ON b.package_id = p.package_id
-    ORDER BY b.booking_id DESC
-    LIMIT 8
-")->fetchAll(PDO::FETCH_ASSOC);
+// --- Fetch the 8 most recent bookings (with package title via lookup) ---
+$pipeline = [
+    ['$sort'  => ['booking_id' => -1]],
+    ['$limit' => 8],
+    [
+        '$lookup' => [
+            'from'         => 'packages',
+            'localField'   => 'package_id',
+            'foreignField' => 'package_id',
+            'as'           => 'package'
+        ]
+    ],
+    [
+        '$unwind' => [
+            'path'                       => '$package',
+            'preserveNullAndEmptyArrays' => true
+        ]
+    ],
+    [
+        '$project' => [
+            'booking_id'       => 1,
+            'customer_name'    => 1,
+            'customer_email'   => 1,
+            'travel_date'      => 1,
+            'number_of_people' => 1,
+            'status'           => 1,
+            'package_title'    => '$package.title',
+        ]
+    ]
+];
+
+$recent_bookings = [];
+try {
+    $cursor = $bookingsCollection->aggregate($pipeline);
+    foreach ($cursor as $doc) {
+        $recent_bookings[] = docToArray($doc);
+    }
+} catch (Exception $e) {
+    // Fallback: empty list
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -127,7 +157,7 @@ $recent_bookings = $pdo->query("
                                 <strong><?php echo htmlspecialchars($row['customer_name']); ?></strong><br>
                                 <small><?php echo htmlspecialchars($row['customer_email']); ?></small>
                             </td>
-                            <td><?php echo htmlspecialchars($row['package_title']); ?></td>
+                            <td><?php echo htmlspecialchars($row['package_title'] ?? '—'); ?></td>
                             <td><?php echo date('M j, Y', strtotime($row['travel_date'])); ?></td>
                             <td><?php echo $row['number_of_people']; ?></td>
                             <td>

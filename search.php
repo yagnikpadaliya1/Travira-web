@@ -6,27 +6,52 @@ $query = isset($_GET['query']) ? trim($_GET['query']) : '';
 $packages = [];
 $error_message = '';
 
-if ($query !== '') {
-    try {
-        $sql = "SELECT package_id, title, destination, price, duration_days, image_path 
-                FROM packages 
-                WHERE title LIKE :q OR destination LIKE :q 
-                ORDER BY price ASC";
-        $stmt = $pdo->prepare($sql);
-        $stmt->bindValue(':q', '%' . $query . '%', PDO::PARAM_STR);
-        $stmt->execute();
-        $packages = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $error_message = "Search error: " . $e->getMessage();
+try {
+    if ($query !== '') {
+        // Case-insensitive search on title or destination
+        $filter = [
+            '$or' => [
+                ['title'       => new MongoDB\BSON\Regex($query, 'i')],
+                ['destination' => new MongoDB\BSON\Regex($query, 'i')],
+            ]
+        ];
+        $cursor = $packagesCollection->find(
+            $filter,
+            [
+                'sort' => ['price' => 1],
+                'projection' => [
+                    'package_id'    => 1,
+                    'title'         => 1,
+                    'destination'   => 1,
+                    'price'         => 1,
+                    'duration_days' => 1,
+                    'image_path'    => 1,
+                ]
+            ]
+        );
+    } else {
+        // Show all packages if no query
+        $cursor = $packagesCollection->find(
+            [],
+            [
+                'sort' => ['package_id' => 1],
+                'projection' => [
+                    'package_id'    => 1,
+                    'title'         => 1,
+                    'destination'   => 1,
+                    'price'         => 1,
+                    'duration_days' => 1,
+                    'image_path'    => 1,
+                ]
+            ]
+        );
     }
-} else {
-    // Show all packages if no query
-    try {
-        $sql = "SELECT package_id, title, destination, price, duration_days, image_path FROM packages ORDER BY package_id ASC";
-        $packages = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $error_message = "Error loading packages: " . $e->getMessage();
+
+    foreach ($cursor as $doc) {
+        $packages[] = docToArray($doc);
     }
+} catch (Exception $e) {
+    $error_message = "Search error: " . $e->getMessage();
 }
 
 require_once 'includes/header.php';
