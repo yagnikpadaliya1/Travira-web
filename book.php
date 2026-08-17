@@ -1,19 +1,24 @@
 <?php
 require_once 'config/db.php';
+// Session is started inside header.php — do NOT call session_start() here.
 
 $package    = null;
 $success    = false;
 $error_msg  = '';
-$name       = '';
-$email      = '';
+
+// Logged-in user data (empty strings if guest)
+$logged_user_id    = isset($_SESSION['user_id'])    ? (int)$_SESSION['user_id']    : null;
+$logged_user_name  = isset($_SESSION['user_name'])  ? $_SESSION['user_name']       : '';
+$logged_user_email = isset($_SESSION['user_email']) ? $_SESSION['user_email']      : '';
 
 // Fetch the package being booked
 if (isset($_GET['package_id']) && is_numeric($_GET['package_id'])) {
     $package_id = (int)$_GET['package_id'];
     try {
-        $doc = $packagesCollection->findOne(['package_id' => $package_id]);
-        $package = docToArray($doc);
-    } catch (Exception $e) {
+        $stmt = $pdo->prepare("SELECT * FROM packages WHERE package_id = :id");
+        $stmt->execute([':id' => $package_id]);
+        $package = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
         $error_msg = "Error loading package: " . $e->getMessage();
     }
 }
@@ -28,20 +33,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($pkg_id && $name && $email && $date && $people >= 1) {
         try {
-            $booking_id = getNextSequenceId($bookingsCollection, 'booking_id');
-
-            $bookingsCollection->insertOne([
-                'booking_id'       => $booking_id,
-                'package_id'       => $pkg_id,
-                'customer_name'    => $name,
-                'customer_email'   => $email,
-                'travel_date'      => $date,
-                'number_of_people' => $people,
-                'status'           => 'Pending',
-                'created_at'       => new MongoDB\BSON\UTCDateTime(),
+            $sql = "INSERT INTO bookings (package_id, user_id, customer_name, customer_email, travel_date, number_of_people, status)
+                    VALUES (:pkg_id, :uid, :name, :email, :date, :people, 'Pending')";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                ':pkg_id' => $pkg_id,
+                ':uid'    => $logged_user_id,   // NULL for guests
+                ':name'   => $name,
+                ':email'  => $email,
+                ':date'   => $date,
+                ':people' => $people,
             ]);
             $success = true;
-        } catch (Exception $e) {
+        } catch (PDOException $e) {
             $error_msg = "Booking failed: " . $e->getMessage();
         }
     } else {
@@ -96,14 +100,23 @@ require_once 'includes/header.php';
 
                             <div class="form-group">
                                 <label for="customer_name">Full Name</label>
-                                <input type="text" id="customer_name" name="customer_name" 
-                                       placeholder="e.g. John Smith" required>
+                                <input type="text" id="customer_name" name="customer_name"
+                                       placeholder="e.g. John Smith"
+                                       value="<?php echo htmlspecialchars($logged_user_name); ?>"
+                                       <?php if ($logged_user_name): ?>readonly class="input-prefilled"<?php endif; ?>
+                                       required>
                             </div>
 
                             <div class="form-group">
                                 <label for="customer_email">Email Address</label>
-                                <input type="email" id="customer_email" name="customer_email" 
-                                       placeholder="e.g. john@example.com" required>
+                                <input type="email" id="customer_email" name="customer_email"
+                                       placeholder="e.g. john@example.com"
+                                       value="<?php echo htmlspecialchars($logged_user_email); ?>"
+                                       <?php if ($logged_user_email): ?>readonly class="input-prefilled"<?php endif; ?>
+                                       required>
+                                <?php if ($logged_user_email): ?>
+                                    <small class="prefill-note"><i class="fa-solid fa-lock" style="font-size:0.7rem"></i> Pre-filled from your account</small>
+                                <?php endif; ?>
                             </div>
 
                             <div class="form-row">

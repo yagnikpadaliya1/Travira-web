@@ -4,18 +4,20 @@ require_once 'config/db.php';
 require_once 'includes/header.php';
 
 // 2. Fetch the package safely
-$package = null;
-$error_message = '';
-
 if (isset($_GET['id']) && is_numeric($_GET['id'])) {
-    $package_id = (int)$_GET['id'];
+    $package_id = $_GET['id'];
 
     try {
-        $doc = $packagesCollection->findOne(['package_id' => $package_id]);
-        $package = docToArray($doc);
-    } catch (Exception $e) {
+        $sql = "SELECT * FROM Packages WHERE package_id = :id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindParam(':id', $package_id, PDO::PARAM_INT);
+        $stmt->execute();
+        $package = $stmt->fetch(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
         $error_message = "Error loading package details: " . $e->getMessage();
     }
+} else {
+    $package = false; 
 }
 ?>
 
