@@ -2,7 +2,7 @@
 /*
  * ADMIN LOGIN PAGE
  * ----------------
- * Checks username and password against the admins collection.
+ * Checks username and password against the admins table.
  * Uses PHP's password_verify() for secure bcrypt comparison.
  * On success, stores session data and redirects to dashboard.
  */
@@ -29,11 +29,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         try {
             // Fetch admin record by username
-            $doc = $adminsCollection->findOne(['username' => $username]);
-            $admin = docToArray($doc);
+            $stmt = $pdo->prepare("SELECT * FROM admins WHERE username = :u LIMIT 1");
+            $stmt->execute([':u' => $username]);
+            $admin = $stmt->fetch(PDO::FETCH_ASSOC);
 
             // Verify password against the stored bcrypt hash
-            if ($admin && isset($admin['password_hash']) && password_verify($password, $admin['password_hash'])) {
+            if ($admin && password_verify($password, $admin['password_hash'])) {
                 $_SESSION['admin_logged_in'] = true;
                 $_SESSION['admin_username']  = $admin['username'];
                 header('Location: dashboard.php');
@@ -41,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $error = 'Invalid username or password.';
             }
-        } catch (Exception $e) {
+        } catch (PDOException $e) {
             $error = 'Database error: ' . $e->getMessage();
         }
     }
@@ -52,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Login — TravelSite</title>
+    <title>Admin Login — Travira</title>
     <link rel="stylesheet" href="../css/style.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -64,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Left Panel: Decorative -->
     <div class="login-panel-left">
         <div class="login-panel-brand">
-            <i class="fa-solid fa-plane-departure"></i> TravelSite
+            <i class="fa-solid fa-paper-plane"></i> Travira
         </div>
         <div class="login-panel-copy">
             <h2>Manage your travel packages and bookings.</h2>
@@ -125,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
 
             <a href="../index.php" class="login-back-link">
-                <i class="fa-solid fa-arrow-left"></i> Back to TravelSite
+                <i class="fa-solid fa-arrow-left"></i> Back to Travira
             </a>
 
         </div>
