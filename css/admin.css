@@ -1,0 +1,8 @@
+/* =============================================
+   ADMIN PANEL — Override body background
+   Simple clean background for admin pages
+   ============================================= */
+body {
+    background-image: none;
+    background-color: #f1f5f9;
+}
